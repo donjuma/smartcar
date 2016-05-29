@@ -8,10 +8,11 @@
  */
 
 // Private
+var request = require('superagent');
 var API_URL = "http://gmapi.azurewebsites.net/";
 
-function callAPI(service, id, params){
-    var response;
+function callAPI(service, id, params, callback, respondBack){
+    var response = {};
     var body = { 'id': id, 'responseType': 'JSON' };
 
     //This will let you override the defaults as well as extend
@@ -35,10 +36,12 @@ function callAPI(service, id, params){
                     //Return error status code. If NaN, return 500!
                     response['statusCode'] = Number(apiRes.status) || 500;
                     response['error'] = {'error': apiRes.reason};
-                    return response;
+                    respondBack(response);
+                    return;
                 }
                 response['payload'] = apiRes;
-                return response;
+                response['callback'] = respondBack;
+                callback(response);
             }
         });
 }
@@ -69,27 +72,13 @@ function validateTypeValue(data, format){
     }
 }
 
-
-
-
- // Public
-module.exports = GMAPI;
-
-function GMAPI(id) {
-    this.id = id;
-}
-
-
-GMAPI.prototype.getVehicleInfo = function(){
-    var serviceTag = 'getVehicleInfoService'; //API service identifier
-    var params = {};    //Additional *optional* parameters for callAPI
+function returnVehicleInformation(apiRequest){
     var response = {};  //Our response object sent back to our API
     var vehicle = {};   //Our vehicle object that we'll construct with info
 
-    //Make the GM API call for the requested data
-    var apiRequest = callAPI(serviceTag, this.id, params);
     if( apiRequest.hasOwnProperty('error') ){
-        return apiRequest;
+        apiRequest['callback'](apiRequest);
+        return;
     }
     var apiResponse = apiRequest.payload.data; //Holds the results from the API call if successfull
 
@@ -109,28 +98,26 @@ GMAPI.prototype.getVehicleInfo = function(){
 
     //Return vehicle information!
     response['json'] = vehicle;
-    return response;
+    apiRequest['callback'](response);
 }
 
-
-GMAPI.prototype.getSecurityStatus = function(){
-    var serviceTag = 'getSecurityStatusService'; //API service identifier
-    var params = {};    //Additional *optional* parameters for callAPI
+function returnSecurityStatus(apiRequest){
     var response = {};  //Our response object sent back to our API
     var security = [];  //Our security array that we'll construct with info
 
-    //Make the GM API call for the requested data
-    var apiRequest = callAPI(serviceTag, this.id, params);
     if( apiRequest.hasOwnProperty('error') ){
-        return apiRequest;
+        apiRequest['callback'](apiRequest);
+        return;
     }
     var apiResponse = apiRequest.payload.data.doors;  //Holds the results from the API call if successfull
 
     //Now we build a response formatted for the Smartcar API...
-    if( String(apiResponse.type).toLowerCase != 'array' ){
+    if( String(apiResponse.type).toLowerCase() != 'array' ){
+        console.log(apiResponse.type);
         response['error'] = {'error': 'Unable to understand API response!'};
         response['statusCode'] = 500; //Unexpected response would be server error not client (i.e. 400s)
-        return response;
+        apiRequest['callback'](response);
+        return;
     }
 
     //Go through returned door array and format the response for Smartcar API
@@ -143,20 +130,25 @@ GMAPI.prototype.getSecurityStatus = function(){
     }
 
     response['send'] = security;
-    return response;
+    apiRequest['callback'](response);
 }
 
-GMAPI.prototype.getEnergy = function(source){
-    var serviceTag = 'getEnergyService'; //API service identifier
-    var params = {};    //Additional *optional* parameters for callAPI
+function returnTankStatus(apiRequest){
+    returnEnergyStatus('tank', apiRequest);
+}
+
+function returnBattStatus(apiRequest){
+    returnEnergyStatus('battery', apiRequest);
+}
+
+function returnEnergyStatus(source, apiRequest){
     var response = {};  //Our response object sent back to our API
     var energy = {};    //Our energy object that we'll construct with info
     var invalid;        //Check to see what energy information was made available
 
-    //Make the GM API call for the requested data
-    var apiRequest = callAPI(serviceTag, this.id, params);
     if( apiRequest.hasOwnProperty('error') ){
-        return apiRequest;
+        apiRequest['callback'](apiRequest);
+        return
     }
     var apiResponse = apiRequest.payload.data;  //Holds the results from the API call if successfull
 
@@ -167,14 +159,16 @@ GMAPI.prototype.getEnergy = function(source){
     }else{
         response['error'] = {'error': 'Invalid Energy Source'};
         response['statusCode'] = 400;
-        return response;
+        apiRequest['callback'](response);
+        return;
     }
 
     //Check if null was retunred for energy level.
     if(invalid){
         response['error'] = {'error': 'Not Supported'};
         response['statusCode'] = 501;
-        return response;
+        apiRequest['callback'](response);
+        return;
     }else{
         //We've already verified the type for the requested source. The other is a freebie...
         energy['batteryLevel']  = {'percent': Number(apiResponse.batteryLevel.value)};
@@ -182,17 +176,15 @@ GMAPI.prototype.getEnergy = function(source){
     }
 
     response['json'] = energy;
-    return response;
+    apiRequest['callback'](response);
 }
 
-GMAPI.prototype.actionEngine = function(params){
-    var serviceTag = 'actionEngineService'; //API service identifier
+function returnEngineAction(apiRequest){
     var response = {};  //Our response object sent back to our API
 
-    //Make the GM API call for the requested data
-    var apiRequest = callAPI(serviceTag, this.id, params);
     if( apiRequest.hasOwnProperty('error') ){
-        return apiRequest;
+        apiRequest['callback'](apiRequest);
+        return;
     }
     var apiResponse = apiRequest.payload.actionResult;  //Holds the results from the API call if successfull
 
@@ -202,45 +194,60 @@ GMAPI.prototype.actionEngine = function(params){
             response['statusCode'] = 200;
             break;
         case 'FAILED':
-            response['json'] = {"status": "error"});
+            response['json'] = {"status": "error"};
             response['statusCode'] = 503; //The service was unavailable for action
             break;
         default:
             response['statusCode'] = 500; //Unrecognized response
             response['error'] = {"error": "Unexpected Response"};
     }
-    return response;
+    apiRequest['callback'](response);
 }
 
 
+ // Public
+module.exports = GMAPI;
+function GMAPI(id) {
+    this.id = id;
+}
 
 
+GMAPI.prototype.getVehicleInfo = function(callback){
+    var serviceTag = 'getVehicleInfoService'; //API service identifier
+    var params = {};    //Additional *optional* parameters for callAPI
+
+    //Make the GM API call for the requested data
+    callAPI(serviceTag, this.id, params, returnVehicleInformation, callback);
+}
 
 
+GMAPI.prototype.getSecurityStatus = function(callback){
+    var serviceTag = 'getSecurityStatusService'; //API service identifier
+    var params = {};    //Additional *optional* parameters for callAPI
+
+    //Make the GM API call for the requested data
+    callAPI(serviceTag, this.id, params, returnSecurityStatus, callback);
+}
 
 
+GMAPI.prototype.getEnergy = function(source, callback){
+    var serviceTag = 'getEnergyService'; //API service identifier
+    var params = {};    //Additional *optional* parameters for callAPI
+
+    //Make the GM API call for the requested data
+    if(source == 'tank'){
+        returnStatus = returnTankStatus;
+    }else{
+        returnStatus = returnBattStatus;
+    }
+    callAPI(serviceTag, this.id, params, returnStatus, callback);
+}
 
 
+GMAPI.prototype.actionEngine = function(params, callback){
+    var serviceTag = 'actionEngineService'; //API service identifier
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    //Make the GM API call for the requested data
+    var apiRequest = callAPI(serviceTag, this.id, params, returnEngineAction, callback);
+}
 
