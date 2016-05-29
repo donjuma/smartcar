@@ -185,6 +185,33 @@ GMAPI.prototype.getEnergy = function(source){
     return response;
 }
 
+GMAPI.prototype.actionEngine = function(params){
+    var serviceTag = 'actionEngineService'; //API service identifier
+    var response = {};  //Our response object sent back to our API
+
+    //Make the GM API call for the requested data
+    var apiRequest = callAPI(serviceTag, this.id, params);
+    if( apiRequest.hasOwnProperty('error') ){
+        return apiRequest;
+    }
+    var apiResponse = apiRequest.payload.actionResult;  //Holds the results from the API call if successfull
+
+    switch(apiResponse.status){
+        case 'EXECUTED':
+            response['json'] = {"status": "success"};
+            response['statusCode'] = 200;
+            break;
+        case 'FAILED':
+            response['json'] = {"status": "error"});
+            response['statusCode'] = 503; //The service was unavailable for action
+            break;
+        default:
+            response['statusCode'] = 500; //Unrecognized response
+            response['error'] = {"error": "Unexpected Response"};
+    }
+    return response;
+}
+
 
 
 
