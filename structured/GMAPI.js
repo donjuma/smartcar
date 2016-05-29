@@ -19,6 +19,7 @@ function callAPI(service, id, params){
         body[i] = params[i];
     }
 
+    //This is the actual HTTP call to the API
     request
         .post(API_URL + service)
         .send(body)
@@ -144,6 +145,51 @@ GMAPI.prototype.getSecurityStatus = function(){
     response['send'] = security;
     return response;
 }
+
+GMAPI.prototype.getEnergy = function(source){
+    var serviceTag = 'getEnergyService'; //API service identifier
+    var params = {};    //Additional *optional* parameters for callAPI
+    var response = {};  //Our response object sent back to our API
+    var energy = {};    //Our energy object that we'll construct with info
+    var invalid;        //Check to see what energy information was made available
+
+    //Make the GM API call for the requested data
+    var apiRequest = callAPI(serviceTag, this.id, params);
+    if( apiRequest.hasOwnProperty('error') ){
+        return apiRequest;
+    }
+    var apiResponse = apiRequest.payload.data;  //Holds the results from the API call if successfull
+
+    if(source == 'tank'){
+        invalid = String(apiResponse.tankLevel.type).toLowerCase() === 'null' ? true : false;
+    }else if(source == 'battery'){
+        invalid = String(apiResponse.batteryLevel.type).toLowerCase() === 'null' ? true : false;
+    }else{
+        response['error'] = {'error': 'Invalid Energy Source'};
+        response['statusCode'] = 400;
+        return response;
+    }
+
+    //Check if null was retunred for energy level.
+    if(invalid){
+        response['error'] = {'error': 'Not Supported'};
+        response['statusCode'] = 501;
+        return response;
+    }else{
+        //We've already verified the type for the requested source. The other is a freebie...
+        energy['batteryLevel']  = {'percent': Number(apiResponse.batteryLevel.value)};
+        energy['tankLevel']     = {'percent': Number(apiResponse.tankLevel.value)};
+    }
+
+    response['json'] = energy;
+    return response;
+}
+
+
+
+
+
+
 
 
 
