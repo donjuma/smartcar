@@ -5,12 +5,20 @@
  * for interfacing with the GM API and formats
  * the results to be compatible with SmartCar.
  *
+ * Author:  Omar Juma
+ * Date:    May 28, 2016
  */
 
 // Private
 var request = require('superagent');
 var API_URL = "http://gmapi.azurewebsites.net/";
 
+
+/*
+ * This function handles the calling of GM API
+ * for the given service. It also implements
+ * basic error handling.
+ */
 function callAPI(service, id, params, callback, respondBack){
     var response = {};
     var body = { 'id': id, 'responseType': 'JSON' };
@@ -46,8 +54,10 @@ function callAPI(service, id, params, callback, respondBack){
         });
 }
 
-//Spec claims that GM API is badly structured and not always
-//consistent. So we'll validate the type field returned.
+/*
+ * Spec claims that GM API is badly structured and not always
+ * consistent. So we'll validate the type field returned.
+ */
 function validateTypeValue(data, format){
     var nullType = String(data.type).toLowerCase() === 'null' ? true : false;
     if(nullType){
@@ -72,6 +82,14 @@ function validateTypeValue(data, format){
     }
 }
 
+
+/*
+ * This is the callback function to be called
+ * once the api has returned. It handles the
+ * specifics for the vehicleInformation service
+ * and validates the response. Finally, it also
+ * formats the data to be returned to Smartcar
+ */
 function returnVehicleInformation(apiRequest){
     var response = {};  //Our response object sent back to our API
     var vehicle = {};   //Our vehicle object that we'll construct with info
@@ -101,6 +119,13 @@ function returnVehicleInformation(apiRequest){
     apiRequest['callback'](response);
 }
 
+/*
+ * This is the callback function to be called
+ * once the api has returned. It handles the
+ * specifics for the securityStatus service
+ * and validates the response. Finally, it also
+ * formats the data to be returned to Smartcar
+ */
 function returnSecurityStatus(apiRequest){
     var response = {};  //Our response object sent back to our API
     var security = [];  //Our security array that we'll construct with info
@@ -133,14 +158,28 @@ function returnSecurityStatus(apiRequest){
     apiRequest['callback'](response);
 }
 
+
+/*
+ * returnEnergyService helper function
+ */
 function returnTankStatus(apiRequest){
     returnEnergyStatus('tank', apiRequest);
 }
 
+/*
+ * returnEnergyService helper function
+ */
 function returnBattStatus(apiRequest){
     returnEnergyStatus('battery', apiRequest);
 }
 
+/*
+ * This is the callback function to be called
+ * once the api has returned. It handles the
+ * specifics for the getEnergy service
+ * and validates the response. Finally, it also
+ * formats the data to be returned to Smartcar
+ */
 function returnEnergyStatus(source, apiRequest){
     var response = {};  //Our response object sent back to our API
     var energy = {};    //Our energy object that we'll construct with info
@@ -179,6 +218,13 @@ function returnEnergyStatus(source, apiRequest){
     apiRequest['callback'](response);
 }
 
+/*
+ * This is the callback function to be called
+ * once the api has returned. It handles the
+ * specifics for the engineAction service
+ * and validates the response. Finally, it also
+ * formats the data to be returned to Smartcar
+ */
 function returnEngineAction(apiRequest){
     var response = {};  //Our response object sent back to our API
 
@@ -207,11 +253,19 @@ function returnEngineAction(apiRequest){
 
  // Public
 module.exports = GMAPI;
+
+/*
+ * This is the puiblic GM API object
+ * to be used for all functionality herin
+ */
 function GMAPI(id) {
     this.id = id;
 }
 
 
+/*
+ * Public getter for vehicle info
+ */
 GMAPI.prototype.getVehicleInfo = function(callback){
     var serviceTag = 'getVehicleInfoService'; //API service identifier
     var params = {};    //Additional *optional* parameters for callAPI
@@ -220,7 +274,9 @@ GMAPI.prototype.getVehicleInfo = function(callback){
     callAPI(serviceTag, this.id, params, returnVehicleInformation, callback);
 }
 
-
+/*
+ * Public getter for security status
+ */
 GMAPI.prototype.getSecurityStatus = function(callback){
     var serviceTag = 'getSecurityStatusService'; //API service identifier
     var params = {};    //Additional *optional* parameters for callAPI
@@ -229,7 +285,11 @@ GMAPI.prototype.getSecurityStatus = function(callback){
     callAPI(serviceTag, this.id, params, returnSecurityStatus, callback);
 }
 
-
+/*
+ * Public getter for energy information.
+ * Facilitates both battery and fuel requests
+ * @param source - The source of energy. (batt/tank)
+ */
 GMAPI.prototype.getEnergy = function(source, callback){
     var serviceTag = 'getEnergyService'; //API service identifier
     var params = {};    //Additional *optional* parameters for callAPI
@@ -243,7 +303,10 @@ GMAPI.prototype.getEnergy = function(source, callback){
     callAPI(serviceTag, this.id, params, returnStatus, callback);
 }
 
-
+/*
+ * Public setter for engine actions.
+ * @param params - Parameter object for api payload (command)
+ */
 GMAPI.prototype.actionEngine = function(params, callback){
     var serviceTag = 'actionEngineService'; //API service identifier
 
